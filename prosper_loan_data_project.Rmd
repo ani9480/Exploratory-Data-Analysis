@@ -1,0 +1,1268 @@
+---
+title: "Prosper loan data"
+author: "Ani"
+date: "30 August 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Inroduction:
+
+First loading all possible libraries that I might use.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, packages}
+library(plyr)
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+library(stringr)
+library(gridExtra)
+```
+
+Notice that the parameter "echo" was set to FALSE for this code chunk. This
+prevents the code from displaying in the knitted HTML output. You should set
+echo=FALSE for all code chunks in your file, unless it makes sense for your
+report to show the code that generated a particular plot.
+
+The other parameters for "message" and "warning" should also be set to FALSE
+for other code chunks once you have verified that each plot comes out as you
+want it to. This will clean up the flow of your report.
+
+ **Importing the data**
+
+For the purpose of this project I have chosen to work with Prosper Loan Data set. I hope to find interesting insight in this domain(loan/credit system) for example who are the suitable customers eligible for a loan, has there been any fraud so cases like these. So to get started first we load the dataset.
+
+```{r echo=FALSE, Load_the_Data}
+
+prosperLoans  <- read.csv('prosperLoanData.csv', 
+                  header = T, check.names = F)
+
+dim(prosperLoans)
+```
+
+So after loading the data we find that there are 113937 rows/observations and 81 variables/columns.
+
+Now there is a loan_data_dict file which contains the information about each variable. For the purpose of this project I am choosing 36 variables which I think is important for exploration purposes. So next step is to subset the data
+
+```{r echo=FALSE, Take_a_look_at_the_data}
+names(prosperLoans)
+
+prosperLoans.sub <- prosperLoans[,c('ListingNumber','ListingCreationDate','Term','LoanStatus','ClosedDate','BorrowerRate','LenderYield','ProsperRating (numeric)','ProsperRating (Alpha)','ProsperScore','ListingCategory (numeric)','BorrowerState','EmploymentStatus','IsBorrowerHomeowner','CurrentlyInGroup','CurrentCreditLines','TotalCreditLinespast7years','OpenRevolvingAccounts','OpenRevolvingMonthlyPayment','TotalInquiries','CurrentDelinquencies','AmountDelinquent','DelinquenciesLast7Years','PublicRecordsLast10Years','RevolvingCreditBalance','BankcardUtilization','TotalTrades','DebtToIncomeRatio','IncomeRange','IncomeVerifiable','StatedMonthlyIncome','LoanOriginalAmount','Investors'
+)]
+
+
+```
+
+
+ 
+
+```{r}
+# Number of Unique Records
+distinct_loan_records <- length(unique(prosperLoans.sub$ListingNumber))
+distinct_loan_records
+
+# After subsetting the data, I wanted to know the unique number of records. I took ListingNumber as the field to check unique customers as it was a parameter which identified a loan borrower. But surprisingly I found that there are 11366 distinct records for a user which means that there may be duplicate/updated data for some users in our data set, Since the total number of rows are 113937.
+
+# Number of Duplicate Records
+duplicate_loan_records <- length(unique(prosperLoans.sub$ListingNumber
+[duplicated(prosperLoans.sub$ListingNumber)])) 
+
+#Saving the duplicate records in a new variable
+duplicate_loans <- unique(prosperLoans.sub$ListingNumber
+[duplicated(prosperLoans.sub$ListingNumber)])
+
+duplicate_loans
+
+# So we find 827 entries which have duplicate records. So for my analysis I needed to reject these customers as they would bring additional details in my observation which may not be very useful. 
+
+```
+
+#Removing unwanted records
+
+```{r echo=FALSE, Removing_unwanted_records}
+
+prosperLoans.sub <- subset( prosperLoans.sub, 
+                           !(ListingNumber %in% duplicate_loans))
+
+
+
+
+```
+
+
+**Univariate Plots Section**
+
+After the data cleaning process, now I can proceed with the analysis. First I am checking single variables and their behavior. So first lets check whats the summary of loan taken and its statistic by exploring the price range in which maximum loan is taken.
+
+```{r echo=FALSE, LoanOriginalAmount_hist}
+summary(prosperLoans.sub$LoanOriginalAmount)
+
+ggplot( aes(x = LoanOriginalAmount), data = prosperLoans.sub) +
+  geom_histogram(binwidth=1000, color = I('black'), fill = I('#099DD9'))
+
+
+```
+
+We can see that there is an outlier in the plot after 30000. 
+
+```{r echo=FALSE, LoanStatus_hist}
+str(prosperLoans.sub)
+
+#Now i want to see the distribution of LoanStatus to get an idea of the defaulted and charged off loans.
+
+ggplot( aes(x = LoanStatus), data = prosperLoans.sub) +
+  geom_bar(color = I('black'), fill = I('#099DD9')) +
+    theme(text = element_text(size=10),
+        axis.text.x = element_text(angle=45, hjust=1))
+
+#We see that there are some borrowers having charged off or defaulted. Lets see thier exact numbers
+
+table(prosperLoans.sub$LoanStatus)
+
+#As we can see the number of Chargedoff loans is 11992 and number of defaulted loans is 5018. Lets focus our analysis on these two status only and find out what factors cause a loan to be charged off or defaulted.
+```
+
+
+
+```{r echo=FALSE}
+#Now lets take a look at the loan amount taken faceted by the loan status
+ggplot( aes(x = LoanOriginalAmount), 
+        data = subset(prosperLoans.sub)) +
+  geom_histogram(binwidth=1000, color = I('black'), fill = I('#099DD9')) +
+  scale_y_continuous(breaks = seq(0, 10000, 1000)) +
+  facet_wrap(~LoanStatus)
+
+# We can see that most people who were charged off or defaulted took loan amount less than $10000. Very few borrowed money more than $10000. This means that they were middle class people or we can assume like that. Lets take a quick look at loan amount categorized by income to get a good idea
+```
+
+
+
+```{r echo=FALSE}
+# First I check which Income range has maximum number of entries, and I get to know people with income range ($25,000-49,999) and ($50,000-74,999) are more likely to take loans.
+
+table(prosperLoans.sub$IncomeRange)
+
+
+# NExt I plot the histogram of Loan Amount distributed across different income ranges.
+
+ggplot( aes(x = LoanOriginalAmount), data = prosperLoans.sub) +
+  geom_histogram(binwidth=1000, color = I('black'), fill = I('#099DD9')) +
+  facet_wrap(~IncomeRange)
+
+#I get a plot as expected with people having salary range of $100,000 and greater taking loans of at least 30k and plus, but the ordering of the plot is a bit out. So I thought of making IncomeRange an Ordered Factor.  
+
+prosperLoans.sub$IncomeRange <- factor( prosperLoans.sub$IncomeRange , 
+                            levels = c(  "$0", "$1-24,999", "$25,000-49,999",
+                            "$50,000-74,999", "$75,000-99,999", "$100,000+",
+                            "Not employed","Not displayed" ), ordered = T)
+
+
+#Now in the earlier plot I noticed a category in Income range named 'Not displayed'. At this stage I am not sure what they are. Maybe the loan borrower was not verified who knows. For now I have choose not to display it. We will analyze it later.
+
+ggplot( aes(x = LoanOriginalAmount), 
+        data = subset(prosperLoans.sub, !(IncomeRange %in% 'Not displayed'))) +
+  geom_histogram(binwidth=1000, color = I('black'), fill = I('#099DD9')) +
+  scale_y_continuous(breaks = seq(0, 7000, 1000)) +
+  facet_wrap(~IncomeRange)
+
+
+```
+
+
+Now lets see the distribution of loan status across income. This will be interesting
+
+```{r echo=FALSE, StatedMonthlyIncome}
+ggplot( aes(x = StatedMonthlyIncome), 
+        data = subset(prosperLoans.sub)) +
+  geom_histogram(color = I('black'), fill = I('#099DD9')) +
+  scale_x_continuous(limits = c(0,50000)) +
+  facet_wrap(~LoanStatus)
+
+str(prosperLoans.sub)
+
+#So we can see that most of the defaulted and charged-off loans come from people who earn below 20000 dollars and it supports the insight we found earlier from Loan Amount that defaulted and charged-off loans come from middle class people. We are not sure yet but it looks like am obvious factor.  
+```
+
+So now lets see the Employment status data.
+```{r echo=FALSE, EmploymentStatus}
+ggplot( aes(x = EmploymentStatus), 
+        data = prosperLoans.sub) +
+  geom_bar() +
+  theme(text = element_text(size=10),
+        axis.text.x = element_text(angle=45, hjust=1))
+
+table(prosperLoans.sub$EmploymentStatus)
+
+# Interestingly we can see that the lender does not have information about some of their borrowers and the data is not available for 5347 people. People even lend money to persons who are not employment those may be college students I guess but who knows. There is an Other option which might seem they have different source of income.
+
+
+table(prosperLoans.sub$EmploymentStatus)
+```
+
+
+
+Next I change the Listing Category numeric data to factor variable with designated values.
+
+0 - Not Available, 1 - Debt Consolidation, 2 - Home Improvement, 3 - Business, 4 - Personal Loan, 5 - Student Use, 6 - Auto, 7- Other, 8 - Baby&Adoption, 9 - Boat, 10 - Cosmetic Procedure, 11 - Engagement Ring, 12 - Green Loans, 13 - Household Expenses, 14 - Large Purchases, 15 - Medical/Dental, 16 - Motorcycle, 17 - RV, 18 - Taxes, 19 - Vacation, 20 - Wedding Loans
+
+```{r echo=FALSE, Rename_labels}
+# Rename awkward Labels
+names(prosperLoans.sub)[names(prosperLoans.sub)=="ListingCategory (numeric)"] <-   "ListingCategoryNum"
+
+# function to assign names to numeric values
+rnListingCategoryNum <- function(x) {
+    if(x == 0 | x == 7 | x == 8 | x ==14 | x == 10 | x == 12 | is.na(x)){
+      'Other/NA'
+    }else if(x == 1){
+      'Debt'
+    }else if(x == 2 | x == 13){
+      'Home'
+    }else if(x == 3){
+      'Business'
+    }else if(x == 4){
+      'Personal'
+    }else if(x == 5){
+      'Student'
+    }else if(x == 6 | x == 16 | x == 17 | x == 9){
+      'Auto'
+    }else if(x == 15){
+      'Medical'
+    }else if(x == 18){
+      'Taxes'
+    }else if(x == 19){
+      'Vacation'
+    }else if(x == 20 | x == 11){
+      'Wedding'
+    }else {
+       x
+    }
+}
+# Create New Listing Category Variable
+prosperLoans.sub$ListingCategoryNum.new <- apply(prosperLoans.sub['ListingCategoryNum'],1,rnListingCategoryNum)
+  
+prosperLoans.sub$ListingCategoryNum.new <-  as.factor(prosperLoans.sub$ListingCategoryNum.new)
+
+
+str(prosperLoans.sub$ListingCategoryNum.new)
+```
+
+
+
+
+```{r echo=FALSE, createfactor}
+prosperLoans.sub$EmploymentStatus.char <- as.character(prosperLoans.sub$EmploymentStatus)
+
+
+ggplot( aes(x = EmploymentStatus), 
+        data= subset(prosperLoans.sub, 
+                     !is.na(EmploymentStatus) & 
+                     (EmploymentStatus.char %in% 
+                         c('Not available', 'Not employed')))) +
+  geom_bar() +
+  
+  facet_wrap(~ListingCategoryNum.new)
+
+# As we can see people with debt and some other listing category do not have employment data available or they are unemployed. So we are in the right track so far it seems. As this is expected.
+
+```
+
+
+### Debt burden
+
+**Debt to Income Ratio**
+
+A debt income ratio is the percentage of a consumer's monthly gross income that goes toward paying debts. The data is capped at 10.01, debt-to-income ratio larger then 1000% will be returned as 1001%.
+
+So lets take a look at the plot.
+
+```{r echo=FALSE, DebtToIncomeRatio}
+
+ggplot( aes(x = DebtToIncomeRatio), data = prosperLoans.sub) +
+  geom_histogram()
+
+# We can see there is an outlier in the data, maybe not even visible. So i thought of excluding top 1 % of the data.
+
+
+ggplot( aes(x = DebtToIncomeRatio), 
+        data = subset(prosperLoans.sub, !is.na(DebtToIncomeRatio))) +
+  geom_histogram()+ 
+  xlim(0, quantile(prosperLoans.sub$DebtToIncomeRatio, 0.99, na.rm = TRUE)) +
+  scale_x_continuous(limits = c(0, 1),breaks = seq(0, 1, 0.05))
+
+
+
+summary(prosperLoans.sub$DebtToIncomeRatio)
+
+#So we can see the maximum is 10.01. This is specified in the data definition, debt to income ratio is always capped to 10.01 (1001%). The minimum value is 0. With the median of 0.22 and mean of 0.276.  
+```
+
+
+### Other information
+
+```{r echo=FALSE, Other_information}
+
+names(prosperLoans.sub)[names(prosperLoans.sub)=="ProsperRating (Alpha)"] <-   "ProsperRatingAlpha"
+
+names(prosperLoans.sub)[names(prosperLoans.sub)=="ProsperRating (numeric)"] <-   "ProsperRatingNum"
+
+
+
+
+#Since there are empty spaces we remove them from analysis
+prosperLoans.sub <- prosperLoans.sub[prosperLoans.sub$ProsperRatingAlpha != '',]
+
+ggplot( aes(x = ProsperRatingAlpha), data = prosperLoans.sub)+
+  geom_bar()
+
+
+#resetting the factors
+
+prosperLoans.sub$ProsperRatingAlpha <- factor(prosperLoans.sub$ProsperRatingAlpha)
+
+
+levels(prosperLoans.sub$ProsperRatingAlpha)
+
+
+
+prosperLoans.sub$ProsperRatingAlpha <- factor(prosperLoans.sub$ProsperRatingAlpha, levels = c("AA", "A", "B", "C", "D", "E", "HR"))
+
+
+
+
+```
+
+The most common rating is rating C, 17862.
+Only 5280 listing have AA rating or about 6.34% of the data. That's very interesting so we get the idea that most loan takers have an average rating. No one pays on time then.
+
+
+```{r echo=FALSE}
+ggplot( aes(x = TotalInquiries), data = prosperLoans.sub)+
+  geom_histogram() +
+  facet_wrap(~ProsperRatingAlpha)
+
+```
+
+```{r echo=FALSE}
+qplot(x = Term, data = prosperLoans.sub)
+
+summary(prosperLoans.sub$Term)
+```
+
+Most loans have 36 months term.
+
+```{r echo=FALSE}
+qplot(x = BorrowerRate*100, data = prosperLoans.sub, binwidth = 1)
+
+summary(prosperLoans.sub$BorrowerRate *100)
+```
+
+The median for the borrower rate is 18.97% and mean 19.66%.
+The maximum borrower rate is  36.00%.
+
+
+# Univariate Analysis
+
+*What is/are the main feature(s) of interest in your dataset?*
+
+While there are many variables which i have chosen, the main features of the data are:
+
+- LoanOriginalAmount
+- LoanStatus
+- ListingCategory         
+- EmploymentStatus        
+- StatedMonthlyIncome            
+- BorrowerRate            
+- Term                    
+- ProsperRating 
+- DelinquenciesLast7Years 
+- PublicRecordsLast10Years
+- DebtToIncomeRatio       
+- BankcardUtilization     
+- TotalInquiries
+
+I chose these variables, because I think these are some imporatant factors while lending money.
+
+*What other features in the dataset do you think will help support your investigation into your feature(s) of interest?*
+
+I think State abbreviation will play a part in knowing which state are vulnerable in Loan frauds. Also listing category will tell us about the loan category for which a person is borrowing money.
+
+*Did you create any new variables from existing variables in the dataset?*
+
+Yes, ListingCategoryNum.new and EmploymentStatus.char.
+
+*Of the features you investigated, were there any unusual distributions? Did you perform any operations on the data to tidy, adjust, or change the form of the data? If so, why did you do this?*
+
+The distribution i plotted mainly are positively skewed ie. DebtToIncomeRatio and LoanOriginalAmount . I did plot some graphs using faceting technique to get a hint of what's going on in a factored variable. I changed Listing Category to a new varibale with simplified categories.
+
+-------------------------------------------------------------------------------------------------------------
+
+
+
+# Bivariate Plots Section
+
+
+So now lets move to two variable analysis to find some interesting patterns
+
+**LoanOriginalAmount vs Investors**
+
+First lets take a look at LoanOriginalAmount vs Investors such that we can get an idea upto how much an ivester is willing to lend their money and how many invester line up for that amount.
+```{r echo=FALSE}
+
+ggplot( aes(x = Investors, y = LoanOriginalAmount),
+        data = prosperLoans.sub) +
+  geom_point(alpha = 1/10, position = "jitter") +
+  scale_x_continuous(limits = c(0, quantile(prosperLoans.sub$Investors, 
+                                            0.99, na.rm = TRUE)))
+
+# The plot is very much scattered, so first we change the x axis scale and then we might have to draw a line to see the trend for this.
+
+ 
+ggplot( aes(x = Investors, y = LoanOriginalAmount),
+        data = prosperLoans.sub) +
+  geom_point(alpha = 1/10, position = "jitter") +
+  scale_x_log10()
+
+#Now lets look at the trend line
+
+ggplot( aes(x = Investors, y = LoanOriginalAmount),
+        data = prosperLoans.sub) +
+  geom_smooth(color = 'red') +
+  scale_x_log10()
+
+#So we can see an exponential curve, we observe that majority of people invest on 10000 dollars and above. It seems everyone wants to get some value from their money via the interest rate they offer.
+
+#Lets find out
+
+summary(subset(prosperLoans.sub, LoanOriginalAmount > 10000)$Investors)
+summary(subset(prosperLoans.sub, LoanOriginalAmount < 10000)$Investors)
+
+#We see that maximum of 1189 people in loans above 10000 dollars and 558 below 10000.
+#So now we are sure that majority of people invest on 10000 dollars and above. 
+
+```
+
+**LoanOriginalAmount vs BorrowerRate**
+
+So next we analyze the LoanOriginalAmount vs BorrowerRate
+
+```{r echo=FALSE}
+ggplot( aes(x = LoanOriginalAmount, y = BorrowerRate*100),
+        data = prosperLoans.sub) +
+  geom_point(alpha = 1/10, position = "jitter") +
+  scale_x_continuous(limits = c(0, quantile(prosperLoans.sub$LoanOriginalAmount, 
+                                            0.99, na.rm = TRUE))) +
+    geom_smooth(method = 'lm', color = 'red') +
+  ylab("Borrower Rate") +
+  xlab("Loan Original Amount") 
+  
+
+#We find out that as loan amount increase the rate of interest decreases. And the most common loan amount is till $10000, most people like to tend upto 10000 dollars.
+
+cor(prosperLoans.sub$LoanOriginalAmount, prosperLoans.sub$BorrowerRate*100)
+```
+
+
+**LoanOriginalAmount vs AnnualIncome**
+
+Now lets have a look at loan amount vs the income range. We will get to know which income range takes loan of upto 10000 dollars.
+
+```{r echo=FALSE}
+ggplot( aes(x = StatedMonthlyIncome, y = LoanOriginalAmount),
+        data = prosperLoans.sub) +
+  geom_point(alpha = 1/20, position = "jitter") +
+  scale_x_continuous(limits = c(0, quantile(prosperLoans.sub$LoanOriginalAmount, 
+                                            0.99, na.rm = TRUE))) +
+    geom_smooth(method = 'lm', color = 'red') 
+
+
+```
+
+Most of the Loan are below 10000 and monthly income is under 10000.
+The quantile shows that the higher the monthly income the higher the median of the loan original amount.
+
+The number of the data that have original amount < 10000 and annual income less then 100000 is:
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+nrow(subset(prosperLoans.sub, LoanOriginalAmount < 10000 & 
+              StatedMonthlyIncome < 10000))
+```
+which is around 53.7% of the data.
+
+
+It seems that people who borrow > 25000 has monthly income of >= 10000
+looks like there some kind of rule, that if you borrow > 25000 the the minimal
+monthly income should be at least 10000.
+
+Let's verify this a bit.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+summary(subset(prosperLoans.sub, LoanOriginalAmount > 25000)$StatedMonthlyIncome)
+```
+
+And yes the minimum monhtly income is 8333 for borrowing that amount of money.
+Let's also check the correlation between the 2 variables.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+cor(prosperLoans.sub$StatedMonthlyIncome, prosperLoans.sub$LoanOriginalAmount)
+```
+
+This relationship is quite weak, so we can't be sure about any rules that for taking a loan your income should be a in a particular range. 
+
+
+**LoanOriginalAmount vs ListingCategoryNum.new**
+
+Now lets have a look at listing category and amount of loan taken
+
+```{r echo=FALSE}
+ggplot(aes(x = ListingCategoryNum.new, y = LoanOriginalAmount), 
+       data = prosperLoans.sub) +
+  geom_boxplot() +
+  scale_y_continuous(limits = c(0, quantile(prosperLoans.sub$LoanOriginalAmount, 0.99, na.rm = TRUE))) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+So we see that the highest amount of loan takers come from the debt consolidation area. That will only increase their burden on the loan.
+
+
+**LoanOriginalAmount vs EmploymentStatus**
+
+Now we take a look at the employment status of the folks who take loans we have already seen this in Univariate analysis but lets have a more in depth analysis using box plots.
+
+```{r echo=FALSE} 
+ggplot(aes(x = EmploymentStatus, y = LoanOriginalAmount), 
+       data = prosperLoans.sub) +
+  geom_boxplot() +
+  scale_y_continuous(limits = c(0, quantile(prosperLoans.sub$LoanOriginalAmount, 0.99, na.rm = TRUE))) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+summary(subset(prosperLoans.sub, 
+               EmploymentStatus == 'Not employed')$LoanOriginalAmount)
+summary(subset(prosperLoans.sub, 
+               EmploymentStatus == 'Part-time')$LoanOriginalAmount)
+```
+
+Interesting to see that not employed folks are requesting loan higher then part time.
+The median and the mean of not employed borrower are 4000 and 5272 vs 2500 and 3364 from part time borrower. Max loans for unemployed is 25000 and it is also greater than max loan for part-time borrower which is 15500
+
+
+**StatedMonthlyIncome vs BorrowerRate**
+
+Now lets take a look at the borrower rate and Monthly Income
+
+```{r echo=FALSE}
+ggplot(aes(x = StatedMonthlyIncome, y = BorrowerRate * 100), 
+       data = prosperLoans.sub) +
+  geom_point(alpha = 1/20) +
+  scale_x_continuous(limits = c(0, quantile(prosperLoans.sub$StatedMonthlyIncome, 0.99, na.rm = TRUE))) +
+  ylab("Borrower Rate Percentage")
+
+```
+
+We can see there is really not much of a relation, only thing we notice is that mainly people who borrow loan are earn below 15000 dollars.
+And I can see the more the income less is your interest rate let us check if there is any negative correlation between them.
+
+```{r echo=FALSE}
+cor(prosperLoans.sub$StatedMonthlyIncome, prosperLoans.sub$BorrowerRate*100)
+```
+
+Okay so there is a negative correlation of -0.093 but this is very small, so we can't really say anything.
+
+
+Let's see the relationship of the Loan Amount with other variables.
+
+```{r echo=FALSE}
+plot1 <- ggplot(aes(x = LoanOriginalAmount, 
+                    y = BankcardUtilization), data = prosperLoans.sub) +
+  geom_point(alpha = 1/20) +
+  stat_smooth(method = "lm")
+
+plot2 <- ggplot(aes(x = LoanOriginalAmount, y = RevolvingCreditBalance), 
+                data = prosperLoans.sub) +
+  geom_point(alpha = 1/20) +
+  stat_smooth(method = "lm")
+
+plot3 <- ggplot(aes(x = LoanOriginalAmount, y = DelinquenciesLast7Years), 
+                data = prosperLoans.sub) +
+  geom_point(alpha = 1/20) +
+  stat_smooth(method = "lm") 
+
+plot4 <- ggplot(aes(x = LoanOriginalAmount, y = PublicRecordsLast10Years), 
+                data = prosperLoans.sub) +
+  geom_point(alpha = 1/20) +
+  stat_smooth(method = "lm")
+
+plot5 <- ggplot(aes(x = LoanOriginalAmount, y = TotalTrades), 
+                data = prosperLoans.sub) +
+  geom_point(alpha = 1/20) +
+  stat_smooth(method = "lm")
+
+plot6 <- ggplot(aes(x = LoanOriginalAmount, y = TotalInquiries), 
+                data = prosperLoans.sub) +
+  geom_point(alpha = 1/20) +
+  stat_smooth(method = "lm")
+
+grid.arrange(plot1, plot2, plot3, plot4, plot5, plot6, nrow = 3, ncol = 2)
+```
+
+So we can see that it is the region between (0-15000) dollars which is the most active and as we can tell BankcardUtilization, Delinquencies, PublicRecordsLast10Years and RevolvingCreditBalance all these variables usually a loan taker in the above range has a certain record related to these which would hamper their prosper rating.
+
+So it seems we should be careful while lending money below 15000 dollars at the least.
+
+**ProsperRatingAlpha vs LoanOriginalAmount**
+
+Let's look into prosper rating also.
+
+```{r echo=FALSE}
+
+ggplot(aes(x = ProsperRatingAlpha, y = LoanOriginalAmount), 
+       data = prosperLoans.sub) +
+  geom_boxplot() +
+  scale_y_continuous(limits = c(0, quantile(prosperLoans.sub$LoanOriginalAmount, 0.99, na.rm = TRUE))) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+```
+
+Lets take a look at the summary by LoanOriginalAmount
+
+```{r echo=FALSE}
+by(prosperLoans.sub$LoanOriginalAmount,
+prosperLoans.sub$ProsperRatingAlpha, summary)
+
+```
+So the maximum loan taken is 35000 dollars and it has got the highest prosper rating too AA type. The median loan value of 4000 dollars lead to a prosper rating of 'E' and 'HR'.
+
+I don't understand why people with such low loan amount cannot pay thier debts in time.
+
+Lets check only 'E' and 'HR' type rating with the Listing category.
+
+```{r echo=FALSE}
+ggplot(aes(x = ListingCategoryNum.new, y = LoanOriginalAmount), 
+       data = subset(prosperLoans.sub,
+                     ProsperRatingAlpha == 'E' | ProsperRatingAlpha == 'HR')) +
+  geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+
+```
+
+So we can see that these folks are generally students and it is as expected. However there are 2 more category which has a large amount of 'E' and "HR" prosper rating those are Auto and Other types.
+
+Note: Auto means those who have taken loan for automobile of any kind.
+
+**ProsperRatingAlpha vs Term**
+
+Now lets look at prosper rating and Loan term
+
+```{r echo=FALSE}
+
+#First let's change the numeric variable to factor variable with 3 categories '12', '36' and '60'
+
+prosperLoans.sub$Term.fac <- factor(prosperLoans.sub$Term)
+levels(prosperLoans.sub$Term.fac)
+
+ggplot(aes(x = ProsperRatingAlpha, y = Term), 
+       data = prosperLoans.sub) +
+  geom_boxplot() 
+
+
+
+```
+
+
+Take a look at the summary of each prosper rating with respect to Term
+
+```{r echo=FALSE}
+by(prosperLoans.sub$Term,
+prosperLoans.sub$ProsperRatingAlpha, summary)
+```
+
+So mostly people take a term of 36 months or 3 years.
+
+Now let's look at the 3 categories we found earlier in Lending category and see their term, borrower rate,TotalInquiries, DelinquenciesLast7Years, PublicRecordsLast10Years
+
+```{r echo=FALSE}
+pl1 <- ggplot(aes(x = ListingCategoryNum.new, y = Term), 
+       data = subset(prosperLoans.sub,
+                     ListingCategoryNum.new == "Auto" |
+                     ListingCategoryNum.new == "Student" |
+                     ListingCategoryNum.new == "Other/NA")) +
+  geom_boxplot() 
+
+  
+  
+pl2 <- ggplot(aes(x = ListingCategoryNum.new, y = BorrowerRate*100), 
+                data = subset(prosperLoans.sub,
+                     ListingCategoryNum.new == "Auto" |
+                     ListingCategoryNum.new == "Student" |
+                     ListingCategoryNum.new == "Other/NA")) +
+  geom_boxplot() 
+
+pl3 <- ggplot(aes(x = ListingCategoryNum.new, y = DelinquenciesLast7Years), 
+                data = subset(prosperLoans.sub,
+                     ListingCategoryNum.new == "Auto" |
+                     ListingCategoryNum.new == "Student" |
+                     ListingCategoryNum.new == "Other/NA")) +
+  geom_boxplot() 
+
+pl4 <- ggplot(aes(x = ListingCategoryNum.new, y = PublicRecordsLast10Years), 
+                data = subset(prosperLoans.sub,
+                     ListingCategoryNum.new == "Auto" |
+                     ListingCategoryNum.new == "Student" |
+                     ListingCategoryNum.new == "Other/NA")) +
+  geom_boxplot() 
+
+pl5 <- ggplot(aes(x = ListingCategoryNum.new, y = TotalInquiries), 
+                data = subset(prosperLoans.sub,
+                     ListingCategoryNum.new == "Auto" |
+                     ListingCategoryNum.new == "Student" |
+                     ListingCategoryNum.new == "Other/NA")) +
+  geom_boxplot() 
+
+
+
+grid.arrange(pl1, pl2, pl3, pl4, pl5, nrow = 3, ncol = 2)
+```
+
+SO we can clearly see people who take loans for Auto purposes are the most risky ones.
+
+Now let's look at the correlation of Prosper rating with some variables and find out which factors are more important.
+
+Correlation between BorrowerRate with Prosper Rating:
+```{r echo=FALSE}
+cor(prosperLoans.sub$ProsperRatingNum, prosperLoans.sub$BorrowerRate, 
+    use = "complete.obs")
+```
+Correlation between Prosper rating with RevolvingCreditBalance:
+```{r echo=FALSE}
+cor(prosperLoans.sub$ProsperRatingNum, prosperLoans.sub$RevolvingCreditBalance,
+    use = "complete.obs")
+```
+Correlation between Prosper rating with BankcardUtilization:
+```{r echo=FALSE}
+cor(prosperLoans.sub$ProsperRatingNum, prosperLoans.sub$BankcardUtilization, 
+    use = "complete.obs")
+```
+Correlation between Prosper rating with Term:
+```{r echo=FALSE}
+cor(prosperLoans.sub$ProsperRatingNum, prosperLoans.sub$Term, 
+    use = "complete.obs")
+```
+Correlation between Prosper rating with OpenRevolvingAccounts:
+```{r echo=FALSE}
+cor(prosperLoans.sub$ProsperRatingNum, prosperLoans.sub$OpenRevolvingAccounts, 
+    use = "complete.obs")
+```
+Correlation between Prosper rating with DebtToIncomeRatio:
+```{r echo=FALSE}
+cor(prosperLoans.sub$ProsperRatingNum, prosperLoans.sub$DebtToIncomeRatio, 
+    use = "complete.obs")
+```
+Correlation between Prosper rating with LoanOriginalAmount:
+```{r echo=FALSE}
+cor(prosperLoans.sub$ProsperRatingNum, prosperLoans.sub$LoanOriginalAmount, 
+    use = "complete.obs")
+```
+
+
+
+So prosper rating is higly dependent on Borrower rate. They have a negative correlation of -0.9531032.
+
+2nd is Bank card utilization with a negative correlation of -0.2658791.
+
+3rd is Open revolving accounts with a positive correlation of 0.1241319.
+
+Finally Prosper rating is positively correlated with loan amount having pearson's R of 0.4298129
+
+So Borrower rate and loan amount is the thing to watch here along with the other 2 parameters.
+
+
+# Bivariate Analysis
+
+*Talk about some of the relationships you observed in this part of the investigation. How did the feature(s) of interest vary with other features in the dataset?*
+
+I wanted to see how several features affect the LoanOriginalAmount. So i took help of Investors,
+BorrowerRate, StatedMonthlyIncome, ListingCategoryNum.new, EmploymentStatus and ProsperRatingAlpha. 
+
+For almost every case i used 99 % of the data removin any outliers from my investigation.
+
+I found that the maximum loan taken is 35000 dollars and it has got the highest prosper rating too AA type. The highest amount of loan takers come from the debt consolidation area.
+I observed that students, Auto and Other types listing category fill up the 'E' and "HR" prosper rating.
+
+SO we can clearly see people who take loans for Auto purposes are the most risky ones.
+
+
+*Did you observe any interesting relationships between the other features (not the main feature(s) of interest)?*
+
+No.
+
+*What was the strongest relationship you found?*
+
+So i found that mainly 3 types of listing category ie. Auto, Other and Students are the most vulnerable to late payments or being a defaulter.
+On the basis of this I plotted some boxplot for these 3 categories and other variables such as Term, BorrowerRate, DelinquenciesLast7Years, PublicRecordsLast10Years and TotalInquiries so that we can find out some data having some bad records to their name. We find that mainly there 
+are records for Auto and Other categories in these plots. So for these 2 listing category the money lenders should take precaution and check the background of the person
+to whom they are lending money.
+
+I also plotted ProsperRatingAlpha vs Term but for Term it is not affected by the rating, the most common terms is 36 across the ratings.
+
+For LoanOriginalAmount vs BorrowerRate We find out that as loan amount increases the rate of interest decreases having pearson's R as -0.413694.
+
+Finally i found out correlation between ProsperRatingNum and various variables and found out prosper rating is higly dependent on Borrower rate with a negative correlation of -0.9531032 and is positively correlated with loan amount having pearson's R of 0.4298129.
+
+So these are some of the strongest relationships i have found.
+
+
+
+------------------------------------------------------------------------------------
+
+# Multivariate Plots Section
+
+
+So we see that prosper rating has a positive correlation for loan amount and Open revolving accounts. So let us first plot these variables with Monthly income 
+
+
+I am transforming Monthly income to yearly income to see the trend
+```{r}
+
+options(scipen = 999)
+
+ggplot(aes(x = StatedMonthlyIncome * 12, y = LoanOriginalAmount), 
+       data = subset(prosperLoans.sub, 
+                     StatedMonthlyIncome*12 < 
+                       quantile(StatedMonthlyIncome*12, 0.99, na.rm = TRUE))) +
+  geom_point(aes(color=ProsperRatingAlpha),  alpha = 0.5, 
+             size = 1, position = 'jitter') +
+  scale_x_log10() + 
+  scale_color_brewer(type="div", palette = 3) +
+  xlab("Yearly Income")
+
+```
+
+We see that those who took a loan amount above 25000 dollars are in AA rating and as the loan amount increases the rating increases. This proves our correlation. This was wierd at first but then i recalled the plot i made earlier from which i got that mostly people with low prosper rating are students, Auto and Other types.
+
+Now next we see which ListingCategory has most of the loans which correspond to their low prosper rating.
+
+```{r}
+
+
+ggplot(aes(x = StatedMonthlyIncome * 12, y = LoanOriginalAmount), 
+       data = subset(prosperLoans.sub, 
+                     (StatedMonthlyIncome*12 < 
+                       quantile(StatedMonthlyIncome*12, 0.99, na.rm = TRUE)) &
+                       ListingCategoryNum.new == "Auto" |
+                       ListingCategoryNum.new == "Student" |
+                       ListingCategoryNum.new == "Other/NA")) +
+  geom_point(aes(color=ListingCategoryNum.new), alpha = 0.5, size = 1, position = 'jitter') +
+  scale_x_log10() + 
+  scale_color_brewer(type="fill", palette = "PuBu")+
+  xlab("Yearly Income")
+
+```
+So we see that most of the loans below 25000 dollars comprise of Other or Auto Listing Category.
+
+
+Alright let's see the plot of OPen revolving accounts vs TotalCreditLinespast7years
+
+```{r}
+
+ggplot(aes(x = OpenRevolvingAccounts, y = TotalCreditLinespast7years), 
+       data = prosperLoans.sub) +
+  geom_point(aes(color=ProsperRatingAlpha),  alpha = 0.5, 
+             size = 1, position = 'jitter') +
+  scale_x_continuous() + 
+  scale_color_brewer(type="div", palette = 3)
+
+```
+
+So I wanted to see how many credit profiles a person had and their open revolving accounts. It seemed to me that they both are positively correlated and isn't it obvious more the accounts more credit lines a person has. 
+
+However I could not make anything out of the prosper rating, it looked very mixed up.
+
+Now let's look at loan amount vs AmountDelinquent
+
+
+```{r}
+ggplot(aes(x = LoanOriginalAmount, y = AmountDelinquent), 
+       data = subset(prosperLoans.sub, 
+                     (AmountDelinquent < 
+                       quantile(AmountDelinquent, 0.99, na.rm = TRUE)))) +
+  geom_point(aes(color=ProsperRatingAlpha),  alpha = 0.5, 
+             size = 1, position = 'jitter') +
+  scale_x_continuous() + 
+  scale_color_brewer(type="div", palette = 3)
+
+```
+
+
+As expected we see that people with less amount Delinquent fall into good Prosper rating. Most of the people who has large amount delinquent have low propser rating, however thier loans are not that much but still they don't pay in time. That is some strange characteristic.
+
+
+Now we check the PublicRecordsLast10Years vs Loan amount 
+
+```{r}
+
+ggplot(aes(x = LoanOriginalAmount, y = PublicRecordsLast10Years), 
+       data = subset(prosperLoans.sub, 
+                     (PublicRecordsLast10Years < 10))) +
+  geom_point(aes(color=ProsperRatingAlpha),  alpha = 0.5, 
+             size = 1, position = 'jitter') +
+  scale_x_continuous() + 
+  scale_color_brewer(type="div", palette = 3)
+
+```
+
+Here we notice that more the public record less is the prosper rating. But again people whose loan are less than 10000 dollars have more public records.
+
+Now let's see how many of them are students or in other listing category
+```{r}
+
+ggplot(aes(x = LoanOriginalAmount, y = PublicRecordsLast10Years), 
+       data = subset(prosperLoans.sub, 
+                     (PublicRecordsLast10Years < 10) & 
+                       (ListingCategoryNum.new == "Auto" |
+                       ListingCategoryNum.new == "Student" |
+                       ListingCategoryNum.new == "Other/NA"))) +
+  geom_point(aes(color=ListingCategoryNum.new), size = 1, 
+             position = 'jitter') +
+  scale_x_continuous() + 
+  scale_color_brewer(type="div", palette = 'RdBu' )  
+
+
+```
+
+So from each plot i can see that those who take loan for Auto and Other have past records attached to them.
+Finally let's look at the income range for these listing categories
+
+```{r}
+
+ggplot(aes(x = IncomeRange, y = LoanOriginalAmount, fill = ListingCategoryNum.new), 
+       data = subset(prosperLoans.sub, 
+                       ListingCategoryNum.new == "Auto" |
+                       ListingCategoryNum.new == "Student" |
+                       ListingCategoryNum.new == "Other/NA"))  +
+  geom_boxplot()
+
+
+
+```
+
+Finally lets take out the summary of yearly income wrt to these particular listing category. From this we get an idea of how much these folks earn. By looking at the above plot it seems the Other category earns much more than the other two. I can't understand what's their problem in settling their loan amount in time. But in future if you want to lend someone money, one should check if they are particularly from these background and proceed with caution.
+
+Finally getting back to my final analysis and after that I will model the data for prdicting Prosper rating
+
+
+First let me make a new data frame which contains summarized values for these 3 listing categories just for reference.
+```{r}
+
+listing_summary <- subset(prosperLoans.sub, 
+         ListingCategoryNum.new == "Auto" |
+         ListingCategoryNum.new == "Student" |
+         ListingCategoryNum.new == "Other/NA") %>%
+  group_by(ListingCategoryNum.new) %>% 
+  summarise (mean_Income = round(mean(StatedMonthlyIncome*12), digits = 0),
+             median_Income = round(median(StatedMonthlyIncome*12), digits = 0),
+             mean_loan = round(mean(LoanOriginalAmount), digits = 0),
+             max_loan = round(max(LoanOriginalAmount), digits = 0),
+             min_loan = round(min(LoanOriginalAmount), digits = 0),
+             number_of_people = n())
+#round(x, digits = 0)
+
+View(listing_summary)
+
+```
+
+Obviously we can see that most of the people approximately 10339 fall in Other/NA listing category and they are the ones who has highest earnings among the other 2 categories but still they have a bad name and do not pay loan in time or get defaulted.
+
+
+Now, let's do our model for predicting ProsperRating. I am going to add in the individual features for this.
+
+```{r}
+library(memisc)
+
+m1 <- lm(ProsperRatingNum ~ LoanOriginalAmount, data = prosperLoans.sub)
+m2 <- update(m1, ~ . + DebtToIncomeRatio)
+m3 <- update(m2, ~ . + OpenRevolvingAccounts)
+m4 <- update(m3, ~ . + TotalTrades)
+m5 <- update(m4, ~ . + StatedMonthlyIncome)
+m6 <- update(m5, ~ . + TotalInquiries)
+m7 <- update(m6, ~ . + BorrowerRate)
+m8 <- update(m7, ~ . + BankcardUtilization)
+
+mtable(m1, m2, m3, m4, m5, m6, m7, m8, sdigits = 3)
+```
+
+The overall R-squared value is 0.914, which is very strong;Wow I am surprised that my model will be predicting the ProsperRating with this much accuracy. And as it looks BorrowerRate might be the most useful varable in our list for predicting Prosper Rating.
+
+
+# Multivariate Analysis
+
+*Talk about some of the relationships you observed in this part of the \ investigation. Were there features that strengthened each other in terms of \ looking at your feature(s) of interest?*
+ 
+Loans with higher ProsperRating have higher Loan amount borrowed and vice versa. Yearly Incmone is not a factor for Prosper Rating.  
+
+I focussed my investigation on the 3 listing categories I found from Bivariate analysis that have low prosper rating. And i found that most loans were taken by Other and Auto listing category and some going even higher than 20000 dollars.
+
+Next i got that folks with low Amount Delinquent have higher Prosper Rating and vice versa, same is for number of Public Records. Most of the people who has large amount delinquent or more public records have low propser rating, however thier loans are not that much big amount but still they don't pay in time. 
+
+So finally i see that those who take loan for Automobile and Other purposes which are Large Purchase or some green loans or cosmetic surgery are very vulnerable
+to untimely payments and have past records attached to them.
+
+
+*Were there any interesting or surprising interactions between features?*
+
+Yes there was in one of my final charts while investigating the 3 listing categories i found that those who take loans with Other Listing Category earns much more than the other two. I can't understand their problem in settling their loan amount in time. So in future the bank or lender should check their background in these categories especially Auto and Other and borrow money.
+
+*OPTIONAL: Did you create any models with your dataset? Discuss the \ strengths and limitations of your model.*
+
+Yes, I created a linear model with dependent variable as the ProsperRating and the predictors as the Loan Original Amount, DebtToIncomeRatio, OpenRevolvingAccounts, 
+TotalTrades, StatedMonthlyIncome, TotalInquiries, BorrowerRate and BankcardUtilization.
+
+The variables in the linear model account for 91.4% of the variance in the Prosper Rating. This means that there is a 91.4% chance that the model will hold true for predicting the Prosper Rating and that's quite a model i created unknowingly. Mostly if you use this model you would get an accurate idea of Prosper Rating.
+
+So I guess, the model's limitation would be the huge amount of variables that I did not use for predicting ProsperRating. I only choose these 8 variables as per my above 
+analysis. I don't know how adding the other variables would effect my model. 
+
+
+#######################################################################################
+
+
+
+
+# Final Plots and Summary
+
+So for my final plots I choose to see the data over a chloropleth. All this time I did my analyis build the model for predicting Prosper Rating. Now let's use the Borrower state data to look at other insights from a birds eye view.
+
+Okay now lets take a look at statewise distribution of mean loan amount.
+
+So for that we need to use maps package and merge the state data with our data.
+
+
+
+```{r}
+#x <- c("NY", "MA")
+#state.name[match(x,state.abb)]
+
+#Creating a new data frame with state data imported from maps package
+
+#install.packages('maps')
+
+library(maps)
+library(ggmap)
+library(maptools)
+
+
+states_map <- map_data("state")
+
+
+#states_map
+
+#Matching state data of peosper loan data set to state.abb(state abbreviations) and getting the state names
+
+
+prosperLoans.sub$State <- state.name[match(prosperLoans.sub$BorrowerState, state.abb)]
+
+#prosperLoans.sub$State
+
+
+
+
+#Converting the state names to lower case for the join i need to apply
+
+prosperLoans.sub$State <- sapply(prosperLoans.sub$State, tolower)
+
+#prosperLoans.sub$State
+
+
+#Summarizing the data and finding out mean loans for each state
+df_state <- subset(prosperLoans.sub, !is.na(DebtToIncomeRatio)) %>% group_by(State) %>% 
+  summarize(mean_loan = mean(LoanOriginalAmount),
+            Total_Inquiries = sum(TotalInquiries),
+            Total_Records = sum(PublicRecordsLast10Years),
+            no_of_investors = sum(Investors))
+
+
+
+
+by(prosperLoans.sub$DebtToIncomeRatio, prosperLoans.sub$State, summary)
+
+
+str(df_state)
+
+#Renaming the columns
+#df_state <- rename(df_state, state = BorrowerState_new)
+
+
+#making a new data frame which contains the centre coordinate of each state and its abbreviation
+states <- data.frame(state.center, state.abb,state.name)
+
+
+
+
+```
+
+
+
+```{r}
+
+
+library(ggthemes)
+
+# creating new data frame by merging states_map & df_state
+new_map <- merge(states_map, df_state, by.x = "region", by.y = "State")
+
+
+new_map <- arrange(new_map, group, order) # to sort polygons in right order
+
+
+
+
+
+```
+
+**Plot One**
+
+```{r echo=FALSE, Plot_One}
+
+
+#ggplot(new_map, aes(x = long, y = lat, group = group, fill = mean_loan)) + 
+#  geom_polygon(color = "black") + 
+#  coord_map("polyconic") + theme_tufte() + labs(x = "", y = "") 
+#  scale_fill_continuous('Mean Loan Amount', low="blue",high="RdBu") +
+
+
+#Plotting the geographic map of the data.
+ggplot(data = new_map, aes(x = long, y = lat, group = group)) +
+  geom_polygon(aes(fill = cut_number(mean_loan, 5)), color = "black") +
+  geom_path(colour = 'gray', linestyle = 2) + 
+  coord_map() +
+  # state.x and state.y = center of each state, where we plot its abbreviation
+  geom_text(data = states, aes(x = x, y = y, label = state.abb, group = NULL), 
+            size =3) +
+  scale_fill_brewer('Loan Amount', palette  = 'PuBu') +
+  theme_bw()
+
+
+
+```
+
+
+### Description One
+
+This chloropleth shows the statewise distribution of mean loan amount. So from the map we see that folks living in California, Texas, New Mexico, Massachusetts, New Jersey and Virginia take huge amount of loans as compared to other states.
+
+
+**Plot Two**
+
+Now let's see the number of investors of each state along with loan amount.
+
+```{r}
+#First we need to make a new dataframe which contains the summarized value and the centers of each state
+
+
+states$state.name <- sapply(states$state.name, tolower)
+
+summarized_map <- merge(states, df_state, by.x = "state.name", by.y = "State")
+
+
+new_map <- arrange(new_map, group, order) # to sort polygons in right order
+```
+
+```{r echo=FALSE, Plot_Two}
+#Plotting the geographic map of the data.
+ggplot(data = new_map, aes(x = long, y = lat, group = group)) +
+  geom_polygon(aes(fill = cut_number(mean_loan, 5)), color = "black") +
+  geom_path(colour = 'gray', linestyle = 2) + 
+  coord_map() +
+  geom_jitter(data=summarized_map, aes(x = x+0.3, y = y+0.3, group=NULL, 
+                                       size  = no_of_investors),
+              colour="Red") +
+  
+  
+  # state.x and state.y = center of each state, where we plot its abbreviation
+  geom_text(data = states, aes(x = x, y = y, label = state.abb, group = NULL), 
+            size =3) +
+  scale_fill_brewer('Loan Amount', palette  = 'PuBu') +
+  theme_bw()
+
+
+```
+
+### Description Two
+
+We can see that California, Texas, New York, Illinois, Florida, Georgia, Ohio and Virginia are some main hubs for investors. Maybe these places are safe for lending your money or giving loans. These are the main states to look for while lending money sine there are so many investors in these places
+
+
+**Plot Three**
+
+Now lets look at the total number of Inquiries and Records for the States.
+
+```{r echo=FALSE, Plot_Three}
+#Plotting the geographic map of the data.
+ggplot(data = new_map, aes(x = long, y = lat, group = group)) +
+  geom_polygon(aes(fill = cut_number(mean_loan, 5)), color = "black") +
+  geom_path(colour = 'gray', linestyle = 2) + 
+  coord_map() +
+  
+  geom_jitter(data=summarized_map, aes(x = x-0.3, y = y-0.3, group=NULL, 
+                                       size  = Total_Records),
+              colour="Black") +
+
+  
+  geom_jitter(data=summarized_map, aes(x = x+0.3, y = y+0.3, group=NULL, 
+                                       size  = Total_Inquiries), 
+              colour="Red") +  
+  
+  
+  # state.x and state.y = center of each state, where we plot its abbreviation
+  geom_text(data = states, aes(x = x, y = y, label = state.abb, group = NULL), 
+            size =3) +
+  scale_fill_brewer('Loan Amount', palette  = 'PuBu') +
+  theme_bw()
+
+
+```
+
+
+### Description Three
+
+So in the last plot we are able to see which states have a bad reputation in settling loans. So we can see that California, Texas, Florida, Illinois, Virginia, New York, Ohia and Michigan have some records associated with Inquiries. So this suggests that people living in these states have been inquired previously for unsettling their loans or have a bad background. 
+
+------------------------------------------------------------------------------------------------
+
+# Reflection
+
+
+The Prosper data set originally contains 113,937 records with 81 features and I was able to trim it down to 83,155 records; removing records with duplicate ListingKeys and those with NA and empty ProsperRating.
+
+There are a lot of challenges which I faced with this project. One is not being familiar with Prosper, so going through their website and reading information on Prosper listing certainly helped, especially in understanding the different features of the Prosper loan.
+
+Another challenge was choosing which feature/variable was the most interesting. The problem with Prosper is that it has many interesting features, so it is hard to choose which one is the most interesting, like ProsperScore, Borrower's Rate, Loan Original Amount etc. Among all these Prosper Rating was the most important feature since it is a measurement of a Loan's risk. So this made me interested on seeing the listing category which would have low Prosper Rating since they would be the most vulnerable in settling their loans.
+
+The most difficult task I find in this study was choosing the 20 - 30 features out of 81. So I mainly choose the variable as per my instinct and which I was familiar with. So, I read about the features from the Prosper website and finally, I came up with 33 features. But after all my analysis I saw that mainly I used 20 - 22 features for my analysis. 
+
+While starting this project I had one thing in mind to find out type of people who make up risky loans. So i carried out my analysis accordingly. First I updated the listing category to fewer categories for my ease of use. Since all were numbered I renamed them to their original meaning so that i could understand what i am dealing with. And I made 11 categories out of it. And after Bivariate Analysis I got the idea that people with Listing Category Student, Other/NA and Auto are very risky. It was after Multivariate analysis that I concluded that loan for Automobile and Other purposes which include Large Purchase, green loans and cosmetic surgery are very vulnerable to untimely payments and have past records attached to them. 
+
+One thing i am happy about is my Linear Model Which I made since it has an acuuracy of 91.4%. I don't know but by hit and trial i got the best variables for the model.
+
+One thing i want to look at is a more improved way to look at the data over a map/chloropleth. In my final plots section I created map using State name abbreviation provided in the data. But there are some techniques in this which are unknown to me. In my third plot the legends are overlapping and I am yet to find a solution to that. This is a very tricky thing but i hope to find some solution to this problem. Coming back to data there are many unused variables. We can use other variables also, In the data there is information on borrower credit score. So it will be interesting to see what kind of relationship exists between credit score and ProsperRating.
+
+
+
+----------------------------------------------------------------------------------------------
+
+# References
+
+[1] https://www.prosper.com/help/
+[2] https://www.prosper.com/help/topics/how-to-read-a-loan-listing/
+[3] www.google.com
+[4] https://s3.amazonaws.com/udacity-hosted-downloads/ud651/GeographyOfAmericanMusic.html
+[5] http://www.statmethods.net/
+[6] http://www.cookbook-r.com/Manipulating_data/
+[7] https://stackoverflow.com/questions/17723822/administrative-regions-map-of-a-country-with-ggmap-and-ggplot2
